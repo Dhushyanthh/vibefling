@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is operating on their own profile
+    function isSelf(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Helper to get trip data safely
+    function getTripData(tripId) {
+      return get(/databases/$(database)/documents/trips/$(tripId)).data;
+    }
+
+    // Check if current user is a member of the given trip
+    function isTripMember(tripId) {
+      return isAuthenticated() && 
+        (request.auth.uid in getTripData(tripId).members);
+    }
+
+    // User profile documents
+    match /users/{uid} {
+      // Any authenticated user can read public user profiles (for member name/avatar rendering)
+      allow read: if isAuthenticated();
+      // Users can only write their own user profile
+      allow write: if isSelf(uid);
+    }
+
+    // Trips (Vibes) collection
+    match /trips/{tripId} {
+      // Allowed to read if already a member, or when verifying document to join via invite link
+      allow read: if isAuthenticated();
+
+      // Creating a new vibe: must be authenticated and creator must be owner and in members list
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.auth.uid in request.resource.data.members);
+
+      // Updating a vibe:
+      // Case 1: Member updating title / details
+      // Case 2: New user joining via invite link (adding only themselves to members list)
+      allow update: if isAuthenticated() && (
+        (request.auth.uid in resource.data.members) ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
+          request.resource.data.members.hasAll(resource.data.members) &&
+          request.resource.data.members.hasAll([request.auth.uid])
+        )
+      );
+
+      // Deleting a vibe: owner only
+      allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+
+      // Photos subcollection (nested under trips/{tripId}/photos/{photoId})
+      match /photos/{photoId} {
+        allow read: if isTripMember(tripId);
+        // Upload photo/media: must be trip member and author must match auth uid
+        allow create: if isTripMember(tripId) && request.resource.data.by == request.auth.uid;
+        // Updating photo (remix meme text, stickers, filters, tags, reactions)
+        allow update: if isTripMember(tripId);
+        // Deleting photo: author of photo or owner of trip
+        allow delete: if isTripMember(tripId) && (
+          resource.data.by == request.auth.uid ||
+          getTripData(tripId).ownerId == request.auth.uid
+        );
+      }
+
+      // Comments subcollection (nested under trips/{tripId}/comments/{commentId})
+      match /comments/{commentId} {
+        allow read: if isTripMember(tripId);
+        allow create: if isTripMember(tripId) && request.resource.data.by == request.auth.uid;
+        allow update, delete: if isTripMember(tripId) && (
+          resource.data.by == request.auth.uid ||
+          getTripData(tripId).ownerId == request.auth.uid
+        );
+      }
+    }
+  }
+}

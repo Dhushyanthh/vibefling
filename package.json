@@ -1,0 +1,24 @@
+{
+  "name": "vibefling",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Vibefling: Group album vibes with full-quality media, Firestore realtime sync, comments, meme remixing, sound effects, and emoji reactions.",
+  "scripts": {
+    "start": "npx serve public",
+    "deploy": "firebase deploy",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage"
+  },
+  "keywords": [
+    "firebase",
+    "firestore",
+    "cloud-storage",
+    "memes",
+    "group-albums"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "exifr": "^7.1.3"
+  }
+}

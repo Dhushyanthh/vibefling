@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Media for vibes stored under trips/{tripId}/{fileName}
+    match /trips/{tripId}/{fileName} {
+      // Must be authenticated to view photos
+      allow read: if request.auth != null;
+
+      // Must be authenticated to upload media (max 250MB per file)
+      allow write: if request.auth != null && request.resource.size < 250 * 1024 * 1024;
+
+      // Allow deletion by authenticated users
+      allow delete: if request.auth != null;
+    }
+  }
+}
