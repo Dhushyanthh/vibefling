@@ -701,6 +701,10 @@ function setupEventListeners() {
     if (b.dataset.a === "del") {
       const p = photos.find((x) => x.id === id);
       if (!p) return;
+      if (!me || p.by !== me.uid) {
+        alert("Only the user who sent this message can delete it.");
+        return;
+      }
       if (!confirm("Are you sure you want to delete this message?")) return;
       sounds.playTap();
       deleteMessage(p);
@@ -711,6 +715,11 @@ function setupEventListeners() {
     if (b.dataset.a === "del-cm") {
       const cid = b.dataset.cid;
       if (!cid) return;
+      const c = comments.find((x) => x.id === cid);
+      if (!me || (c && c.by !== me.uid)) {
+        alert("Only the user who sent this comment can delete it.");
+        return;
+      }
       if (!confirm("Delete this comment?")) return;
       sounds.playTap();
       deleteComment(cid);
@@ -921,6 +930,11 @@ async function addComment(photoId, text) {
 
 // Delete a Photo / Message
 async function deleteMessage(photo) {
+  if (!me || photo.by !== me.uid) {
+    alert("Only the user who sent this message can delete it.");
+    return;
+  }
+
   if (isDemoMode) {
     if (demoState.photos[tid]) {
       demoState.photos[tid] = demoState.photos[tid].filter((p) => p.id !== photo.id);
@@ -959,6 +973,12 @@ async function deleteMessage(photo) {
 
 // Delete a Comment
 async function deleteComment(cid) {
+  const commentObj = comments.find((x) => x.id === cid);
+  if (!me || (commentObj && commentObj.by !== me.uid)) {
+    alert("Only the user who sent this comment can delete it.");
+    return;
+  }
+
   if (isDemoMode) {
     if (demoState.comments[tid]) {
       demoState.comments[tid] = demoState.comments[tid].filter((c) => c.id !== cid);
@@ -1259,10 +1279,10 @@ function draw() {
       `;
     }
 
-    const canDeletePhoto = isMe || (trip && trip.ownerId === me.uid);
+    const canDeletePhoto = Boolean(me && me.uid && p.by === me.uid);
 
     const commentsListHtml = displayedComments.map((c) => {
-      const canDeleteComment = c.by === me.uid || (trip && trip.ownerId === me.uid);
+      const canDeleteComment = Boolean(me && me.uid && c.by === me.uid);
       return `
         <div class="cm">
           <b>${esc(names[c.by]?.name || "Explorer")}</b>
@@ -1308,17 +1328,29 @@ function draw() {
         `);
       }
 
-      // Details Inspector Button
-      pills.push(`
-        <button class="meta-pill info-pill" data-a="view-exif" data-id="${p.id}" title="Inspect full EXIF & location metadata">
-          ℹ️ Info
-        </button>
-      `);
-
       if (pills.length > 0) {
-        metaBadgesHtml = `<div class="meta-badge-row">${pills.join("")}</div>`;
+        metaBadgesHtml = pills.join("");
       }
     }
+
+    const actionLinksHtml = `
+      <div class="action-links">
+        ${p.kind !== "text" ? `
+          <button data-a="view-exif" data-id="${p.id}" title="Inspect full EXIF date, location & camera details">ℹ️ Info</button>
+          <button data-a="edit" data-id="${p.id}">✏️ Remix meme</button>
+          <button data-a="export" data-id="${p.id}">📥 Save PNG</button>
+        ` : `
+          <button data-a="export" data-id="${p.id}">📥 Save Card</button>
+        `}
+        ${canDeletePhoto ? `
+          <button data-a="del" data-id="${p.id}" class="action-del-btn" title="Delete message">🗑️ Delete</button>
+        ` : ""}
+      </div>
+    `;
+
+    const tagsHtml = (p.tags && p.tags.length > 0)
+      ? `<div class="tags-row">${p.tags.map((x) => `<span class="tag-badge">@${esc(names[x]?.name || "friend")}</span>`).join(" ")}</div>`
+      : "";
 
     return `
       <div class="msg ${isMe ? "me" : ""}">
@@ -1331,26 +1363,14 @@ function draw() {
           </div>
           <div class="bub">
             ${mediaHtml(p)}
-            ${metaBadgesHtml}
-            ${p.kind !== "text" && p.cap ? `<div class="tx">${esc(p.cap)}</div>` : ""}
-
-            <div class="sm">
-              <div class="tags-row">
-                ${(p.tags || []).map((x) => `<span class="tag-badge">@${esc(names[x]?.name || "friend")}</span>`).join(" ")}
+            <div class="meta-action-bar">
+              <div class="meta-badges-col">
+                ${metaBadgesHtml}
               </div>
-              <div class="action-links">
-                ${p.kind !== "text" ? `
-                  <button data-a="view-exif" data-id="${p.id}" title="Inspect EXIF date & location">📍 Info</button>
-                  <button data-a="edit" data-id="${p.id}">✏️ Remix meme</button>
-                  <button data-a="export" data-id="${p.id}">📥 Save PNG</button>
-                ` : `
-                  <button data-a="export" data-id="${p.id}">📥 Save Card</button>
-                `}
-                ${canDeletePhoto ? `
-                  <button data-a="del" data-id="${p.id}" class="action-del-btn" title="Delete message">🗑️ Delete</button>
-                ` : ""}
-              </div>
+              ${actionLinksHtml}
             </div>
+            ${p.kind !== "text" && p.cap ? `<div class="tx">${esc(p.cap)}</div>` : ""}
+            ${tagsHtml}
 
             <!-- Reactions Bar -->
             <div class="reactions-bar">

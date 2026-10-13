@@ -63,21 +63,16 @@ service cloud.firestore {
         allow create: if isTripMember(tripId) && request.resource.data.by == request.auth.uid;
         // Updating photo (remix meme text, stickers, filters, tags, reactions)
         allow update: if isTripMember(tripId);
-        // Deleting photo: author of photo or owner of trip
-        allow delete: if isTripMember(tripId) && (
-          resource.data.by == request.auth.uid ||
-          getTripData(tripId).ownerId == request.auth.uid
-        );
+        // Deleting photo: author of photo alone
+        allow delete: if isTripMember(tripId) && resource.data.by == request.auth.uid;
       }
 
       // Comments subcollection (nested under trips/{tripId}/comments/{commentId})
       match /comments/{commentId} {
         allow read: if isTripMember(tripId);
         allow create: if isTripMember(tripId) && request.resource.data.by == request.auth.uid;
-        allow update, delete: if isTripMember(tripId) && (
-          resource.data.by == request.auth.uid ||
-          getTripData(tripId).ownerId == request.auth.uid
-        );
+        // Updating or deleting comment: author of comment alone
+        allow update, delete: if isTripMember(tripId) && resource.data.by == request.auth.uid;
       }
     }
   }

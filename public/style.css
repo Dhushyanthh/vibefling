@@ -648,22 +648,18 @@ input::placeholder, textarea::placeholder {
   color: var(--ink-primary);
 }
 
-/* Tags & Smalls */
-.sm {
-  font-size: 12.5px;
-  color: var(--ink-muted);
-  padding: 0 14px 12px;
+/* Tags & Badges */
+.tags-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  border-top: 1px solid var(--line-subtle);
-  margin-top: 8px;
-  padding-top: 10px;
+  gap: 6px;
+  padding: 2px 14px 8px;
 }
 
 .tag-badge {
   color: #0284C7;
+  font-size: 12px;
   font-weight: 600;
   background: rgba(2, 132, 199, 0.1);
   padding: 2px 8px;
@@ -672,7 +668,9 @@ input::placeholder, textarea::placeholder {
 
 .action-links {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   margin-left: auto;
 }
 
@@ -680,16 +678,21 @@ input::placeholder, textarea::placeholder {
   background: none;
   border: none;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  transition: color 0.15s;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .action-links button:hover {
   color: var(--ink-primary);
+  background: rgba(15, 23, 42, 0.05);
 }
 
 .action-links button.action-del-btn {
@@ -700,6 +703,7 @@ input::placeholder, textarea::placeholder {
 .action-links button.action-del-btn:hover {
   color: #DC2626;
   opacity: 1;
+  background: rgba(239, 68, 68, 0.08);
 }
 
 /* Reactions Bar */
@@ -962,8 +966,24 @@ input::placeholder, textarea::placeholder {
 }
 
 /* =========================================
-   EXIF & Location Metadata Badge Styles
+   EXIF & Location Metadata + Actions Bar
    ========================================= */
+.meta-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 14px 4px;
+}
+
+.meta-badges-col {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .meta-badge-row {
   display: flex;
   flex-wrap: wrap;
