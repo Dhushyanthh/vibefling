@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, query, where, orderBy, onSnapshot, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, orderBy, onSnapshot, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
 import { sounds } from "./sound-effects.js";
 import { exportMemeAsPng } from "./meme-generator.js";
@@ -23,6 +23,7 @@ let curPhoto = null;
 let unsubs = [];
 let expandedComments = {}; // Track expanded comment threads by photo ID
 let isDemoMode = false;
+let currentTripsList = [];
 
 // Demo In-Memory State for instant preview before user configures Firebase
 let demoState = {
@@ -132,11 +133,80 @@ export function showToast(message) {
 
 // Sound toggle initialization
 function updateSoundIcon() {
+  const isMuted = sounds.isMuted();
   const btn = $("soundToggle");
   if (btn) {
-    btn.textContent = sounds.isMuted() ? "🔇" : "🔊";
-    btn.title = sounds.isMuted() ? "Sound Effects Muted" : "Sound Effects On";
+    btn.textContent = isMuted ? "🔇" : "🔊";
+    btn.title = isMuted ? "Sound Effects Muted" : "Sound Effects On";
   }
+  const dIcon = $("drawerSoundIcon");
+  const dText = $("drawerSoundText");
+  if (dIcon) dIcon.textContent = isMuted ? "🔇" : "🔊";
+  if (dText) dText.textContent = isMuted ? "Sound Effects: Muted" : "Sound Effects: On";
+}
+
+// Mobile Navigation Drawer rendering
+function updateDrawer() {
+  // Update User Card
+  const userCard = $("drawerUserCard");
+  if (userCard) {
+    if (me) {
+      userCard.innerHTML = `
+        <div class="drawer-user-avatar" style="${me.photoURL ? `background-image:url(${esc(me.photoURL)})` : ''}">
+          ${me.photoURL ? '' : esc(me.displayName ? me.displayName[0] : 'U')}
+        </div>
+        <div class="drawer-user-info">
+          <div class="drawer-user-name">${esc(me.displayName || 'Viber')}</div>
+          <div class="drawer-user-status">${isDemoMode ? '✨ Demo Mode' : esc(me.email || 'Online')}</div>
+        </div>
+      `;
+    } else {
+      userCard.innerHTML = `
+        <div class="drawer-user-avatar">👤</div>
+        <div class="drawer-user-info">
+          <div class="drawer-user-name">Guest</div>
+          <div class="drawer-user-status">Not signed in</div>
+        </div>
+      `;
+    }
+  }
+
+  // Update Vibes Count Badge
+  const countBadge = $("drawerVibeCount");
+  if (countBadge) countBadge.textContent = currentTripsList.length;
+
+  // Update Vibes List in Drawer
+  const vibesListEl = $("drawerVibesList");
+  if (vibesListEl) {
+    vibesListEl.innerHTML = "";
+    if (currentTripsList.length === 0) {
+      vibesListEl.innerHTML = `
+        <div style="text-align: center; padding: 16px 8px; font-size: 13px; color: var(--ink-muted);">
+          No vibes yet. Create one below!
+        </div>
+      `;
+    } else {
+      currentTripsList.forEach((t) => {
+        const item = document.createElement("button");
+        const isActive = tid === t.id;
+        item.className = "drawer-vibe-item" + (isActive ? " active" : "");
+        const memberCount = t.members ? t.members.length : 1;
+        item.innerHTML = `
+          <div class="drawer-vibe-title">🌴 ${esc(t.title)}</div>
+          <div class="drawer-vibe-meta">${isActive ? '<b>Active</b>' : `👥 ${memberCount}`}</div>
+        `;
+        item.onclick = () => {
+          sounds.playTap();
+          const d = $("mobileDrawer");
+          if (d) d.hidden = true;
+          openTrip(t.id);
+        };
+        vibesListEl.appendChild(item);
+      });
+    }
+  }
+
+  updateSoundIcon();
 }
 
 // Check configuration on load
@@ -207,6 +277,58 @@ export function initApp() {
 
 // Event Listeners
 function setupEventListeners() {
+  // Mobile Navigation Drawer Controls
+  const openDrawer = () => {
+    sounds.playTap();
+    updateDrawer();
+    const d = $("mobileDrawer");
+    if (d) d.hidden = false;
+  };
+
+  const closeDrawer = () => {
+    const d = $("mobileDrawer");
+    if (d) d.hidden = true;
+  };
+
+  if ($("hamburgerBtnTrips")) $("hamburgerBtnTrips").onclick = openDrawer;
+  if ($("hamburgerBtnTrip")) $("hamburgerBtnTrip").onclick = openDrawer;
+  if ($("closeDrawerBtn")) $("closeDrawerBtn").onclick = closeDrawer;
+  if ($("drawerScrim")) $("drawerScrim").onclick = closeDrawer;
+
+  if ($("drawerSoundBtn")) {
+    $("drawerSoundBtn").onclick = () => {
+      sounds.toggleMute();
+      updateSoundIcon();
+      if (!sounds.isMuted()) sounds.playPop();
+    };
+  }
+
+  if ($("drawerSignOutBtn")) {
+    $("drawerSignOutBtn").onclick = () => {
+      closeDrawer();
+      if ($("out")) $("out").click();
+    };
+  }
+
+  if ($("drawerNewVibeBtn")) {
+    $("drawerNewVibeBtn").onclick = () => {
+      closeDrawer();
+      show("trips");
+      listTrips();
+      setTimeout(() => {
+        const input = $("nt");
+        if (input) {
+          input.scrollIntoView({ behavior: "smooth", block: "center" });
+          input.focus();
+        }
+      }, 200);
+    };
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+
   // Sound Mute Toggle
   const soundBtn = $("soundToggle");
   if (soundBtn) {
@@ -572,6 +694,27 @@ function setupEventListeners() {
       i.value = "";
       sounds.playTap();
       addComment(id, text);
+      return;
+    }
+
+    // Delete Photo or Message
+    if (b.dataset.a === "del") {
+      const p = photos.find((x) => x.id === id);
+      if (!p) return;
+      if (!confirm("Are you sure you want to delete this message?")) return;
+      sounds.playTap();
+      deleteMessage(p);
+      return;
+    }
+
+    // Delete Comment
+    if (b.dataset.a === "del-cm") {
+      const cid = b.dataset.cid;
+      if (!cid) return;
+      if (!confirm("Delete this comment?")) return;
+      sounds.playTap();
+      deleteComment(cid);
+      return;
     }
   };
 
@@ -776,6 +919,67 @@ async function addComment(photoId, text) {
   }
 }
 
+// Delete a Photo / Message
+async function deleteMessage(photo) {
+  if (isDemoMode) {
+    if (demoState.photos[tid]) {
+      demoState.photos[tid] = demoState.photos[tid].filter((p) => p.id !== photo.id);
+    }
+    if (demoState.comments[tid]) {
+      demoState.comments[tid] = demoState.comments[tid].filter((c) => c.pid !== photo.id);
+    }
+    photos = photos.filter((p) => p.id !== photo.id);
+    comments = comments.filter((c) => c.pid !== photo.id);
+    draw();
+    sounds.playPop();
+    showToast("Message deleted! 🗑️");
+    return;
+  }
+
+  try {
+    // 1. Delete document in Firestore
+    await deleteDoc(doc(db, "trips", tid, "photos", photo.id));
+
+    // 2. Delete file in Cloud Storage if applicable
+    if (photo.path) {
+      try {
+        await deleteObject(ref(st, photo.path));
+      } catch (storageErr) {
+        console.warn("Storage delete notice:", storageErr);
+      }
+    }
+
+    sounds.playPop();
+    showToast("Message deleted! 🗑️");
+  } catch (err) {
+    console.error("Error deleting message:", err);
+    alert("Could not delete message: " + err.message);
+  }
+}
+
+// Delete a Comment
+async function deleteComment(cid) {
+  if (isDemoMode) {
+    if (demoState.comments[tid]) {
+      demoState.comments[tid] = demoState.comments[tid].filter((c) => c.id !== cid);
+    }
+    comments = comments.filter((c) => c.id !== cid);
+    draw();
+    sounds.playPop();
+    showToast("Comment deleted! 🗑️");
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, "trips", tid, "comments", cid));
+    sounds.playPop();
+    showToast("Comment deleted! 🗑️");
+  } catch (err) {
+    console.error("Error deleting comment:", err);
+    alert("Could not delete comment: " + err.message);
+  }
+}
+
 // Start Demo Mode
 function startDemoMode() {
   isDemoMode = true;
@@ -793,6 +997,8 @@ function startDemoMode() {
 // List Trips (Vibes)
 function listTrips() {
   clearUnsubs();
+  tid = null;
+  updateDrawer();
   show("trips");
 
   // Render current user badge
@@ -849,6 +1055,8 @@ function listTrips() {
 }
 
 function renderTripList(tripList) {
+  currentTripsList = tripList || [];
+  updateDrawer();
   const container = $("tl");
   container.innerHTML = "";
 
@@ -888,6 +1096,7 @@ function renderTripList(tripList) {
 function openTrip(id) {
   clearUnsubs();
   tid = id;
+  updateDrawer();
   show("trip");
 
   if (isDemoMode) {
@@ -1050,12 +1259,20 @@ function draw() {
       `;
     }
 
-    const commentsListHtml = displayedComments.map((c) => `
-      <div class="cm">
-        <b>${esc(names[c.by]?.name || "Explorer")}</b>
-        <span>${esc(c.text)}</span>
-      </div>
-    `).join("");
+    const canDeletePhoto = isMe || (trip && trip.ownerId === me.uid);
+
+    const commentsListHtml = displayedComments.map((c) => {
+      const canDeleteComment = c.by === me.uid || (trip && trip.ownerId === me.uid);
+      return `
+        <div class="cm">
+          <b>${esc(names[c.by]?.name || "Explorer")}</b>
+          <span>${esc(c.text)}</span>
+          ${canDeleteComment ? `
+            <button class="cm-del-btn" data-a="del-cm" data-cid="${c.id}" title="Delete comment">✕</button>
+          ` : ""}
+        </div>
+      `;
+    }).join("");
 
     // EXIF Metadata Badges (Date Taken, GPS Location, Camera)
     const meta = p.metadata || p.exif;
@@ -1129,6 +1346,9 @@ function draw() {
                 ` : `
                   <button data-a="export" data-id="${p.id}">📥 Save Card</button>
                 `}
+                ${canDeletePhoto ? `
+                  <button data-a="del" data-id="${p.id}" class="action-del-btn" title="Delete message">🗑️ Delete</button>
+                ` : ""}
               </div>
             </div>
 
